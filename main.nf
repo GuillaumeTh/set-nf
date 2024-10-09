@@ -142,6 +142,9 @@ process README {
 }
 
 log.info "Input Ants Warp: ${params.tractoflow}"
+log.info "Input Freesurfer: ${params.surfaces}"
+log.info "Profile: ${params.atlas}"
+surfaces = file(params.surfaces)
 tractoflow = file(params.tractoflow)
 
 map_for_rois_seed = Channel
@@ -162,23 +165,6 @@ fodf_and_map_for_pft = Channel
 nb_sub_fodf = file("${tractoflow}/**/FODF_Metrics/*fodf.nii.gz").size()
 log.info "Number of fodf is ${nb_sub_fodf.toString()}"
 
-log.info "Input Freesurfer: ${params.surfaces}"
-log.info " Profile: ${params.atlas}"
-surfaces = file(params.surfaces)
-
-if (params.atlas=="freesurfer_standard"){
-    in_surfaces_label = Channel
-        .fromFilePairs("${surfaces}/**/{label/lh.aparc.annot,label/rh.aparc.annot}",
-                        size: 2, maxDepth:3, flat: true) {it.parent.parent.name}
-        .ifEmpty { exit 1, "Cannot find freesurfer data: ${surfaces}/**/{label/lh.aparc.annot,label/rh.aparc.annot}" }
-}
-else if (params.atlas=="freesurfer_a2009s"){
-    in_surfaces_label = Channel
-        .fromFilePairs("${surfaces}/**/{label/lh.aparc.a2009s.annot,label/rh.aparc.a2009s.annot}",
-                        size: 2, maxDepth:3, flat: true) {it.parent.parent.name}
-        .ifEmpty { exit 1, "Cannot find freesurfer data ${surfaces}/**/{label/lh.aparc.a2009s.annot,label/rh.aparc.a2009s.annot}" }
-}
-
 in_surfaces_wmparc = Channel
     .fromFilePairs("${surfaces}/**/mri/wmparc*",
                     size: 1, maxDepth:3, flat: true) {it.parent.parent.name}
@@ -195,7 +181,7 @@ in_surfaces_label
     .set{in_surfaces}
 
 nb_sub_surf = file("${surfaces}/**/surf/lh.white").size()
-println("Number of surface is " + nb_sub_surf.toString())
+log.info "Number of surface is ${nb_sub_surf.toString()}"
 
 (annots_for_surfaces_masks, annots_for_surfaces_labels, label_vol_to_convert, freesurfer_surfaces_to_convert) = in_surfaces
     .map{sid, lh_annot, rh_annot, wmparc, lh_pial, lh_white, rh_pial, rh_white ->
@@ -567,58 +553,51 @@ process B__Concatenate_Label {
     """
 }
 
-// Transform surfaces and ROIs
-if (params.nowarp){
-    surfaces_to_warp
-        .into{surfaces_for_seed;surfaces_for_smooth;surfaces_for_density}
+
+process A__Convert_ANTs_Transformation {
+    cpus 1
+    time { '1m' * task.attempt }
+    memory { '2 GB' * task.attempt }
+
+    input:
+    set sid, file(affine_transfo), file(warp_transfo)\
+        from ants_transfo_to_convert
+
+    output:
+    set sid, "${sid}__vtk_transfo.txt", file(warp_transfo)\
+        into ants_transfo_for_surfaces
+
+    script:
+    """
+    ConvertTransformFile 3 ${affine_transfo}\
+        ${sid}__vtk_transfo.txt --hm
+    """
 }
-else{
-    // if "tractoflow" or "antswarp"
-    process A__Convert_ANTs_Transformation {
-        cpus 1
-        time { '1m' * task.attempt }
-        memory { '2 GB' * task.attempt }
 
-        input:
-        set sid, file(affine_transfo), file(warp_transfo)\
-            from ants_transfo_to_convert
+ants_transfo_for_surfaces
+    .join(surfaces_to_warp)
+    .set{surfaces_with_transform}
 
-        output:
-        set sid, "${sid}__vtk_transfo.txt", file(warp_transfo)\
-            into ants_transfo_for_surfaces
+//Apply Transform to surfaces (from t1 to dwi space)
+process C__Register_Surface {
+    cpus 1
+    time { '10m' * task.attempt }
+    memory { '8 GB' * task.attempt }
 
-        script:
-        """
-        ConvertTransformFile 3 ${affine_transfo}\
-            ${sid}__vtk_transfo.txt --hm
-        """
-    }
+    input:
+    set sid, file(affine_transfo), file(warp_transfo), file(surfaces)\
+        from surfaces_with_transform
 
-    ants_transfo_for_surfaces
-        .join(surfaces_to_warp)
-        .set{surfaces_with_transform}
+    output:
+    set sid, "${sid}__surfaces_b0.vtk"\
+        into surfaces_for_seed, surfaces_for_smooth, surfaces_for_density
 
-    //Apply Transform to surfaces (from t1 to dwi space)
-    process C__Register_Surface {
-        cpus 1
-        time { '10m' * task.attempt }
-        memory { '8 GB' * task.attempt }
-
-        input:
-        set sid, file(affine_transfo), file(warp_transfo), file(surfaces)\
-            from surfaces_with_transform
-
-        output:
-        set sid, "${sid}__surfaces_b0.vtk"\
-            into surfaces_for_seed, surfaces_for_smooth, surfaces_for_density
-
-        script:
-        """
-        scil_transform_surface.py ${surfaces} ${affine_transfo}\
-            ${sid}__surfaces_b0.vtk\
-            --ants_warp ${warp_transfo}
-        """
-    }
+    script:
+    """
+    scil_transform_surface.py ${surfaces} ${affine_transfo}\
+        ${sid}__surfaces_b0.vtk\
+        --ants_warp ${warp_transfo}
+    """
 }
 
 surfaces_for_smooth
@@ -911,29 +890,3 @@ process H__Compute_Surface_Density {
     """
 }
 
-// streamlines_for_concatenate
-//     .groupTuple(size: nb_tracking_per_sub)
-//     .set{streamlines_grouped_for_concatenate}
-//
-// process G__Concatenate_Tractogram {
-//     cpus 1
-//
-//     input:
-//     set sid, file(tractograms) from streamlines_grouped_for_concatenate
-//
-//     output:
-//     file "${sid}__set_c_filtered.fib"
-//
-//     when:
-//     params.concatenate_tractogram
-//
-//     script:
-//     command_lines=""
-//     tractograms.each{
-//         command_lines +=" ${it} "
-//     }
-//     """
-//     scil_streamlines_math.py concatenate $command_lines\
-//         ${sid}__set_c_filtered.fib
-//     """
-// }
