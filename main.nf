@@ -162,8 +162,8 @@ fodf_and_map_for_pft = Channel
                     size: 3, maxDepth:3, flat: true) {it.parent.parent.name}
     .ifEmpty { exit 1, "Cannot find ${tractoflow}/**/{FODF_Metrics/*fodf.nii.gz,PFT_Maps/*map_exclude.nii.gz,PFT_Maps/*map_include.nii.gz}" }
 
-nb_sub_fodf = file("${tractoflow}/**/FODF_Metrics/*fodf.nii.gz").size()
-log.info "Number of fodf is ${nb_sub_fodf.toString()}"
+// nb_sub_fodf = file("${tractoflow}/**/FODF_Metrics/*fodf.nii.gz").size()
+log.info "Number of fodf is ${map_for_rois_seed.count()}"
 
 if (params.atlas=="freesurfer_standard"){
     in_surfaces_label = Channel
