@@ -190,7 +190,7 @@ in_surfaces_mesh = Channel
 
 in_surfaces_label
     .join(in_surfaces_wmparc)
-    .join(in_surfaces_mesh).view()
+    .join(in_surfaces_mesh)
     .into {in_surfaces; surface_count}
 
 // nb_sub_surf = file("${surfaces}/**/surf/lh.white").size()
@@ -234,8 +234,8 @@ process A__Convert_Freesurfer_Surface {
 }
 
 // setup variable
-surface_count.count().view().set{nb_subject}
-log.info "Number of subject (with surface and fodf) is ${nb_subject}"
+surface_count.count().set{nb_subject}
+log.info "Number of subject (with surface and fodf) is ${nb_subject.first()}"
 
 process A__Convert_Label_Volume {
     cpus 1
@@ -699,7 +699,7 @@ process E__Surface_Seeding_Map {
 
 // Where the magic happen
 nb_tracking_per_sub = params.nb_dynamic_seeding_iter * (random_generator_list).size()
-total_tracking = nb_subject*(nb_tracking_per_sub+1)
+total_tracking = nb_subject.first()*(nb_tracking_per_sub+1)
 
 surfaces_seeding_map_for_set
     .combine(random_generator_list)
