@@ -190,7 +190,7 @@ in_surfaces_mesh = Channel
 
 in_surfaces_label
     .join(in_surfaces_wmparc)
-    .join(in_surfaces_mesh)
+    .join(in_surfaces_mesh).view()
     .into {in_surfaces; surface_count}
 
 // nb_sub_surf = file("${surfaces}/**/surf/lh.white").size()
@@ -234,7 +234,7 @@ process A__Convert_Freesurfer_Surface {
 }
 
 // setup variable
-surface_count.count().set{nb_subject}
+surface_count.count().view().set{nb_subject}
 log.info "Number of subject (with surface and fodf) is ${nb_subject}"
 
 process A__Convert_Label_Volume {
