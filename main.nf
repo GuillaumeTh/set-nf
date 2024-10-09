@@ -191,7 +191,7 @@ in_surfaces_mesh = Channel
 in_surfaces_label
     .join(in_surfaces_wmparc)
     .join(in_surfaces_mesh)
-    .into {in_surfaces, surface_count}
+    .into {in_surfaces; surface_count}
 
 // nb_sub_surf = file("${surfaces}/**/surf/lh.white").size()
 // log.info "Number of surface is ${in_surfaces_wmparc.first().count()}"
