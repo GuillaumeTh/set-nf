@@ -78,7 +78,7 @@ if(params.help) {
 
 log.info ""
 log.info "SET pipeline"
-log.info "==============================================="
+log.info "============"
 log.info ""
 log.info "Start time: $workflow.start"
 log.info ""
@@ -141,338 +141,97 @@ process README {
     """
 }
 
-if (params.tractoflow){
-    if (params.fodf || params.pft_maps || params.rois_seed || params.antswarp){
-        log.error "Cannot use --tractoflow with --fodf --pft_maps --rois_seed or --antswarp \n\t --tractoflow already set all of those inputs"
-    }
+log.info "Input Ants Warp: ${params.tractoflow}"
+tractoflow = file(params.tractoflow)
 
-    log.info "Input Ants Warp: ${params.tractoflow}"
-    tractoflow = file(params.tractoflow)
+map_for_rois_seed = Channel
+    .fromFilePairs("${tractoflow}/**/DTI_Metrics/*fa.nii.gz",
+                    size: 1, maxDepth:3, flat: true) {it.parent.parent.name}
+    .ifEmpty { exit 1, "Cannot find ${tractoflow}/**/DTI_Metrics/*fa.nii.gz"}
 
-    map_for_rois_seed = Channel
-        .fromFilePairs("${tractoflow}/**/DTI_Metrics/*fa.nii.gz",
-                       size: 1, maxDepth:3, flat: true) {it.parent.parent.name}
-        .ifEmpty { exit 1, "Cannot find ${tractoflow}/**/DTI_Metrics/*fa.nii.gz"}
+ants_transfo_to_convert = Channel
+    .fromFilePairs("${tractoflow}/**/Register_T1/*{output0GenericAffine.mat,output1InverseWarp.nii.gz}",
+                    size: 2, maxDepth:3, flat: true) {it.parent.parent.name}
+    .ifEmpty { exit 1, "Cannot find ${tractoflow}/**/Register_T1/*{output0GenericAffine.mat,output1InverseWarp.nii.gz}" }
 
-    ants_transfo_to_convert = Channel
-        .fromFilePairs("${tractoflow}/**/Register_T1/*{output0GenericAffine.mat,output1InverseWarp.nii.gz}",
-                       size: 2, maxDepth:3, flat: true) {it.parent.parent.name}
-        .ifEmpty { exit 1, "Cannot find ${tractoflow}/**/Register_T1/*{output0GenericAffine.mat,output1InverseWarp.nii.gz}" }
+fodf_and_map_for_pft = Channel
+    .fromFilePairs("${tractoflow}/**/{FODF_Metrics/*fodf.nii.gz,PFT*Maps/*map_exclude.nii.gz,PFT*Maps/*map_include.nii.gz}",
+                    size: 3, maxDepth:3, flat: true) {it.parent.parent.name}
+    .ifEmpty { exit 1, "Cannot find ${tractoflow}/**/{FODF_Metrics/*fodf.nii.gz,PFT_Maps/*map_exclude.nii.gz,PFT_Maps/*map_include.nii.gz}" }
 
-    fodf_and_map_for_pft = Channel
-        .fromFilePairs("${tractoflow}/**/{FODF_Metrics/*fodf.nii.gz,PFT*Maps/*map_exclude.nii.gz,PFT*Maps/*map_include.nii.gz}",
-                       size: 3, maxDepth:3, flat: true) {it.parent.parent.name}
-        .ifEmpty { exit 1, "Cannot find ${tractoflow}/**/{FODF_Metrics/*fodf.nii.gz,PFT_Maps/*map_exclude.nii.gz,PFT_Maps/*map_include.nii.gz}" }
+nb_sub_fodf = file("${tractoflow}/**/FODF_Metrics/*fodf.nii.gz").size()
+log.info "Number of fodf is ${nb_sub_fodf.toString()}"
 
-    nb_sub_fodf = file("${tractoflow}/**/FODF_Metrics/*fodf.nii.gz").size()
-    println("Number of fodf is " + nb_sub_fodf.toString())
+log.info "Input Freesurfer: ${params.surfaces}"
+log.info " Profile: ${params.atlas}"
+surfaces = file(params.surfaces)
+
+if (params.atlas=="freesurfer_standard"){
+    in_surfaces_label = Channel
+        .fromFilePairs("${surfaces}/**/{label/lh.aparc.annot,label/rh.aparc.annot}",
+                        size: 2, maxDepth:3, flat: true) {it.parent.parent.name}
+        .ifEmpty { exit 1, "Cannot find freesurfer data: ${surfaces}/**/{label/lh.aparc.annot,label/rh.aparc.annot}" }
 }
-else {
-    if (params.antswarp && params.nowarp){
-        log.error "Choose between --antswarp  or --nowarp, not both"
-    }
-
-    if (params.antswarp){
-        log.info "Input Ants Warp: ${params.antswarp}"
-        antswarp = file(params.antswarp)
-        ants_transfo_to_convert = Channel
-            .fromFilePairs("${antswarp}/**/Register_T1/*{output0GenericAffine.mat,output1InverseWarp.nii.gz}",
-                           size: 2, maxDepth:3, flat: true) {it.parent.parent.name}
-            .ifEmpty { exit 1, "Cannot find ${antswarp}/**/Register_T1/*{output0GenericAffine.mat,output1InverseWarp.nii.gz}" }
-    }
-    else if (!params.nowarp){
-        log.error "Use --antswarp path/to/warps/ (or --tractoflow) \n\t to transform T1 surfaces to diffusion (b0) space \n\t or --nowarp if T1 is already in diffusion space"
-    }
-
-    if (params.rois_seeding){
-        if (!params.rois_seed && !params.tractoflow){
-            log.error "Cannot use rois_seeding=true if --tractoflow  or --rois_seed is not given \n\t put rois_seeding=false in the config file"
-        }
-        else if (params.rois_seed){
-            log.info "Input Rois Seeds: ${params.rois_seed}"
-            rois_seed = file(params.rois_seed)
-            map_for_rois_seed = Channel
-                .fromFilePairs("${rois_seed}/**/*fa.nii.gz",
-                               size: 1, maxDepth:3, flat: true) {it.parent.parent.name}
-                .ifEmpty { exit 1, "Cannot find ${rois_seed}/**/*fa.nii.gz" }
-        }
-    }
-
-    if (params.rois_seeding){
-        if (!params.rois_seed && !params.tractoflow){
-            log.error "Cannot use rois_seeding=true if --tractoflow  or --rois_seed is not given \n\t put rois_seeding=false in the config file"
-        }
-        else if (params.rois_seed){
-            log.info "Input Rois Seeds: ${params.rois_seed}"
-            rois_seed = file(params.rois_seed)
-            map_for_rois_seed = Channel
-                .fromFilePairs("${rois_seed}/**/*fa.nii.gz",
-                               size: 1, maxDepth:3, flat: true) {it.parent.parent.name}
-                .ifEmpty { exit 1, "Cannot find ${rois_seed}/**/*fa.nii.gz" }
-        }
-    }
-    else if (params.rois_seed){
-        log.error "--rois_seed was given but rois_seeding=false \n\t put rois_seeding=true in the config file"
-    }
-
-    if (params.fodf){
-        log.info "Input FODF: ${params.fodf}"
-        fodf = file(params.fodf)
-
-        fodf_for_pft = Channel
-            .fromFilePairs("${fodf}/**/*/*fodf.nii.gz",
-                           size: 1, maxDepth:3, flat: true) {it.parent.parent.name}
-            .ifEmpty { exit 1, "Cannot find ${fodf}/**/*/*fodf.nii.gz" }
-       nb_sub_fodf = file("${fodf}/**/*/*fodf.nii.gz").size()
-       println("Number of fodf is " + nb_sub_fodf.toString())
-    }
-    else {
-        log.error "Use --fodf path/to/warps/ (or --tractoflow)"
-    }
-
-    if (params.pft_maps){
-        log.info "Input PFT maps: ${params.pft_maps}"
-        pft_maps = file(params.pft_maps)
-
-        maps_for_pft = Channel
-            .fromFilePairs("${pft_maps}/**/*/*{map_exclude.nii.gz,map_include.nii.gz}",
-                           size: 2, maxDepth:3, flat: true) {it.parent.parent.name}
-            .ifEmpty { exit 1, "Cannot find ${pft_maps}/**/*/*{map_exclude.nii.gz,map_include.nii.gz}" }
-    }
-    else {
-        log.error "Use --pft_maps path/to/warps/ (or --tractoflow)"
-    }
-
+else if (params.atlas=="freesurfer_a2009s"){
+    in_surfaces_label = Channel
+        .fromFilePairs("${surfaces}/**/{label/lh.aparc.a2009s.annot,label/rh.aparc.a2009s.annot}",
+                        size: 2, maxDepth:3, flat: true) {it.parent.parent.name}
+        .ifEmpty { exit 1, "Cannot find freesurfer data ${surfaces}/**/{label/lh.aparc.a2009s.annot,label/rh.aparc.a2009s.annot}" }
 }
 
-if (params.nowarp){
-    log.info "No Ants Warp: Surface are assumed in the diffusion (b0) space\n"
-}
+in_surfaces_wmparc = Channel
+    .fromFilePairs("${surfaces}/**/mri/wmparc*",
+                    size: 1, maxDepth:3, flat: true) {it.parent.parent.name}
+    .ifEmpty { exit 1, "Cannot find freesurfer data ${surfaces}/**/mri/wmparc*" }
 
-if (params.is_freesurfer && params.is_civet)
-{
-    log.error " cannot use civet together with freesurfer profile )"
-}
-else if (params.is_freesurfer) {
-    log.info "Input Freesurfer: ${params.surfaces}"
-    log.info " Profile: ${params.atlas}"
-    surfaces = file(params.surfaces)
+in_surfaces_mesh = Channel
+    .fromFilePairs("${surfaces}/**/{surf/lh.pial,surf/lh.white,surf/rh.pial,surf/rh.white}",
+                    size: 4, maxDepth:3, flat: true) {it.parent.parent.name}
+    .ifEmpty { exit 1, "Cannot find freesurfer data ${surfaces}/**/{surf/lh.pial,surf/lh.white,surf/rh.pial,surf/rh.white}" }
 
-    if (params.is_vtk) {
-        if (params.atlas=="freesurfer_standard"){
-            in_surfaces = Channel
-                .fromFilePairs("${surfaces}/**/*{lh*aparc.annot,lh*pial.vtk,lh*white.vtk,rh*aparc.annot,rh*pial.vtk,rh*white.vtk,wmparc*}",
-                               size: 7, maxDepth:3, flat: true) {it.parent.name}
-                .ifEmpty { exit 1, "Cannot find freesurfer data:  ${surfaces}/**/*{lh*aparc.annot,lh*pial.vtk,lh*white.vtk,rh*aparc.annot,rh*pial.vtk,rh*white.vtk,wmparc*}" }
-        }
-        else if (params.atlas=="freesurfer_a2009s"){
-            in_surfaces = Channel
-                .fromFilePairs("${surfaces}/**/*{lh*a2009s.annot,lh*pial.vtk,lh*white.vtk,rh*a2009s.annot,rh*pial.vtk,rh*white.vtk,wmparc*}",
-                               size: 7, maxDepth:3, flat: true) {it.parent.name}
-                .ifEmpty { exit 1, "Cannot find freesurfer data: ${surfaces}/**/*{lh*a2009s.annot,lh*pial.vtk,lh*white.vtk,rh*a2009s.annot,rh*pial.vtk,rh*white.vtk,wmparc*}" }
-        }
-        else
-        {
-            log.error "Freesurfer profile should be given with vtk input ( e.g. -profile vtk, freesurfer_proper )"
-        }
+in_surfaces_label
+    .join(in_surfaces_wmparc)
+    .join(in_surfaces_mesh)
+    .set{in_surfaces}
 
-        nb_sub_surf = file("${surfaces}/**/*lh*white.vtk").size()
-        println("Number of surface is " + nb_sub_surf.toString())
+nb_sub_surf = file("${surfaces}/**/surf/lh.white").size()
+println("Number of surface is " + nb_sub_surf.toString())
 
-        (annots_for_surfaces_masks, annots_for_surfaces_labels, label_vol_to_convert, surfaces_for_surfaces_masks, surfaces_for_surfaces_labels, surfaces_for_lps) = in_surfaces
-          .map{sid, lh_annot, lh_pial, lh_white, rh_annot, rh_pial, rh_white, wmparc ->
-              [tuple(sid, lh_annot, rh_annot),
-              tuple(sid, lh_annot, rh_annot),
-              tuple(sid, wmparc),
-              tuple(sid, lh_white, rh_white),
-              tuple(sid, lh_white, rh_white),
-              tuple(sid, lh_pial, rh_pial, lh_white, rh_white)]}
-          .separate(6)
-    }
-    else{
-        if (params.atlas=="freesurfer_standard"){
-            in_surfaces_label = Channel
-                .fromFilePairs("${surfaces}/**/{label/lh.aparc.annot,label/rh.aparc.annot}",
-                               size: 2, maxDepth:3, flat: true) {it.parent.parent.name}
-                .ifEmpty { exit 1, "Cannot find freesurfer data: ${surfaces}/**/{label/lh.aparc.annot,label/rh.aparc.annot}" }
-        }
-        else if (params.atlas=="freesurfer_a2009s"){
-            in_surfaces_label = Channel
-                .fromFilePairs("${surfaces}/**/{label/lh.aparc.a2009s.annot,label/rh.aparc.a2009s.annot}",
-                               size: 2, maxDepth:3, flat: true) {it.parent.parent.name}
-                .ifEmpty { exit 1, "Cannot find freesurfer data ${surfaces}/**/{label/lh.aparc.a2009s.annot,label/rh.aparc.a2009s.annot}" }
-        }
+(annots_for_surfaces_masks, annots_for_surfaces_labels, label_vol_to_convert, freesurfer_surfaces_to_convert) = in_surfaces
+    .map{sid, lh_annot, rh_annot, wmparc, lh_pial, lh_white, rh_pial, rh_white ->
+        [tuple(sid, lh_annot, rh_annot),
+        tuple(sid, lh_annot, rh_annot),
+        tuple(sid, wmparc),
+        tuple(sid, lh_pial, rh_pial, lh_white, rh_white)]}
+    .separate(4)
 
-        in_surfaces_wmparc = Channel
-            .fromFilePairs("${surfaces}/**/mri/wmparc*",
-                           size: 1, maxDepth:3, flat: true) {it.parent.parent.name}
-            .ifEmpty { exit 1, "Cannot find freesurfer data ${surfaces}/**/mri/wmparc*" }
+process A__Convert_Freesurfer_Surface {
+    cpus 1
+    time { '10m' * task.attempt }
+    memory { '8 GB' * task.attempt }
 
-        in_surfaces_mesh = Channel
-            .fromFilePairs("${surfaces}/**/{surf/lh.pial,surf/lh.white,surf/rh.pial,surf/rh.white}",
-                           size: 4, maxDepth:3, flat: true) {it.parent.parent.name}
-            .ifEmpty { exit 1, "Cannot find freesurfer data ${surfaces}/**/{surf/lh.pial,surf/lh.white,surf/rh.pial,surf/rh.white}" }
+    input:
+    set sid, file(lh_pial),  file(rh_pial),  file(lh_white),  file(rh_white)\
+        from freesurfer_surfaces_to_convert
 
-        in_surfaces_label
-            .join(in_surfaces_wmparc)
-            .join(in_surfaces_mesh)
-            .set{in_surfaces}
+    output:
+    set sid, "${sid}__lh_white.vtk", "${sid}__rh_white.vtk"\
+        into surfaces_for_surfaces_masks, surfaces_for_surfaces_labels
+    set sid, "${sid}__lh_pial.vtk", "${sid}__rh_pial.vtk",\
+        "${sid}__lh_white.vtk", "${sid}__rh_white.vtk"\
+        into surfaces_for_lps
 
-        nb_sub_surf = file("${surfaces}/**/surf/lh.white").size()
-        println("Number of surface is " + nb_sub_surf.toString())
-
-        (annots_for_surfaces_masks, annots_for_surfaces_labels, label_vol_to_convert, freesurfer_surfaces_to_convert) = in_surfaces
-          .map{sid, lh_annot, rh_annot, wmparc, lh_pial, lh_white, rh_pial, rh_white ->
-              [tuple(sid, lh_annot, rh_annot),
-              tuple(sid, lh_annot, rh_annot),
-              tuple(sid, wmparc),
-              tuple(sid, lh_pial, rh_pial, lh_white, rh_white)]}
-          .separate(4)
-
-        process A__Convert_Freesurfer_Surface {
-            cpus 1
-            time { '10m' * task.attempt }
-            memory { '8 GB' * task.attempt }
-
-            input:
-            set sid, file(lh_pial),  file(rh_pial),  file(lh_white),  file(rh_white)\
-              from freesurfer_surfaces_to_convert
-
-            output:
-            set sid, "${sid}__lh_white.vtk", "${sid}__rh_white.vtk"\
-              into surfaces_for_surfaces_masks, surfaces_for_surfaces_labels
-            set sid, "${sid}__lh_pial.vtk", "${sid}__rh_pial.vtk",\
-              "${sid}__lh_white.vtk", "${sid}__rh_white.vtk"\
-              into surfaces_for_lps
-
-            script:
-            """
-            mris_convert --to-scanner ${lh_pial} lh.pial.vtk
-            mris_convert --to-scanner ${rh_pial} rh.pial.vtk
-            mris_convert --to-scanner ${lh_white} lh.white.vtk
-            mris_convert --to-scanner ${rh_white} rh.white.vtk
-            mv lh.pial.vtk ${sid}__lh_pial.vtk
-            mv rh.pial.vtk ${sid}__rh_pial.vtk
-            mv lh.white.vtk ${sid}__lh_white.vtk
-            mv rh.white.vtk ${sid}__rh_white.vtk
-            """
-        }
-    }
-}
-else if (params.is_civet) {
-    log.info "Input Civet: ${params.surfaces}"
-    log.info "Civet Labels: ${params.civet_template}"
-    log.info " Profile: ${params.atlas}"
-
-    if (params.atlas=="civet2"){
-        surfaces = file(params.surfaces)
-        in_civet_surf = Channel
-            .fromFilePairs("${surfaces}/**/{surfaces/*gray_surface_left_81920.obj,surfaces/*gray_surface_right_81920.obj,surfaces/*white_surface_left_81920.obj,surfaces/*white_surface_right_81920.obj}",
-                           size: 4, maxDepth:4, flat: true) {it.parent.parent.name}
-            .ifEmpty { exit 1, "Cannot find civet data: ${surfaces}/**/{surfaces/*gray_surface_left_81920.obj,surfaces/*gray_surface_right_81920.obj,surfaces/*white_surface_left_81920.obj,surfaces/*white_surface_right_81920.obj}" }
-        in_civet_transfo = Channel
-            .fromFilePairs("${surfaces}/**/transforms/linear/*t1_tal.xfm",
-                            size: 1, maxDepth:5, flat: true) {it.parent.parent.parent.name}
-             .ifEmpty { exit 1, "Cannot find civet data: ${surfaces}/**/transforms/linear/*t1_tal.xfm" }
-        in_civet_animal = Channel
-            .fromFilePairs("${surfaces}/**/segment/*animal_labels.mnc",
-                            size: 1, maxDepth:5, flat: true) {it.parent.parent.name}
-             .ifEmpty { exit 1, "Cannot find civet data: ${surfaces}/**/segment/*animal_labels.mnc" }
-    }
-
-    process A__Civet_Template {
-        cpus 1
-        time { '1m' * task.attempt }
-        memory { '1 GB' * task.attempt }
-        tag = {"global"}
-        publishDir = {"${params.output_dir}/${task.process}"}
-
-        output:
-        set "template_left.txt", "template_right.txt"\
-            into in_civet_template
-
-        script:
-        """
-        cp ${file(params.civet_template)}/*left.txt template_left.txt
-        cp ${file(params.civet_template)}/*right.txt template_right.txt
-        """
-    }
-
-    in_civet_surf
-        .join(in_civet_transfo)
-        .join(in_civet_animal)
-        .combine(in_civet_template)
-        .set{in_civet}
-
-    nb_sub_surf = file("${surfaces}/**/surfaces/*gray_surface_left_81920.obj").size()
-    println("Number of surface is " + nb_sub_surf.toString())
-
-    (annots_for_surfaces_masks, annots_for_surfaces_labels, xfm_transfo_to_convert, animal_to_convert, civet_surfaces_to_convert) = in_civet
-      .map{sid, lh_pial, rh_pial, lh_white, rh_white, xfm_transfo, animal_labels, lh_annot, rh_annot  ->
-          [tuple(sid, lh_annot, rh_annot),
-          tuple(sid, lh_annot, rh_annot),
-          tuple(sid, xfm_transfo),
-          tuple(sid, animal_labels, xfm_transfo),
-          tuple(sid, lh_pial, rh_pial, lh_white, rh_white, xfm_transfo)]}
-      .separate(5)
-
-    process A__Convert_CIVET_Surface {
-        cpus 1
-
-        input:
-        set sid, file(lh_pial), file(rh_pial), file(lh_white), file(rh_white), file(xfm_transfo)\
-            from civet_surfaces_to_convert
-
-        output:
-        set sid, "${sid}__lh_white.vtk", "${sid}__rh_white.vtk"\
-            into surfaces_for_surfaces_masks, surfaces_for_surfaces_labels
-        set sid, "${sid}__lh_pial.vtk", "${sid}__rh_pial.vtk",\
-            "${sid}__lh_white.vtk", "${sid}__rh_white.vtk"\
-            into surfaces_for_lps
-
-        script:
-        """
-        xfminvert ${xfm_transfo}  ${sid}__t1_tal_inv.xfm
-        sed '''/Linear_Transform =/,/;/!d ; /Linear/d ; s/^ //; s/;/\\n0 0 0 1/g'''\
-            ${xfm_transfo} > ${sid}__to_t1_transfo.txt
-        sed '''/Linear_Transform =/,/;/!d ; /Linear/d ; s/^ //; s/;/\\n0 0 0 1/g'''\
-            ${sid}__t1_tal_inv.xfm > ${sid}__to_t1_inv_transfo.txt
-
-        transform_objects ${lh_pial} ${sid}__t1_tal_inv.xfm lh_pial_t1.mni.obj
-        transform_objects ${rh_pial} ${sid}__t1_tal_inv.xfm rh_pial_t1.mni.obj
-        transform_objects ${lh_white} ${sid}__t1_tal_inv.xfm lh_white_t1.mni.obj
-        transform_objects ${rh_white} ${sid}__t1_tal_inv.xfm rh_white_t1.mni.obj
-
-        scil_convert_surface.py lh_pial_t1.mni.obj ${sid}__lh_pial.vtk
-        scil_convert_surface.py rh_pial_t1.mni.obj ${sid}__rh_pial.vtk
-        scil_convert_surface.py lh_white_t1.mni.obj ${sid}__lh_white.vtk
-        scil_convert_surface.py rh_white_t1.mni.obj ${sid}__rh_white.vtk
-        """
-    }
-
-    process A__Convert_Animal {
-        cpus 1
-
-        input:
-        set sid, file(animal_labels), file(xfm_transfo)\
-            from animal_to_convert
-
-        output:
-        set sid, "${sid}__animal_labels_native.nii"\
-            into label_vol_to_convert
-
-        script:
-        """
-        mincresample -nearest_neighbour -tfm_input_sampling\
-            -invert_transformation -transformation ${xfm_transfo}\
-            ${animal_labels} ${sid}__animal_labels_native.mnc
-
-        mnc2nii ${sid}__animal_labels_native.mnc ${sid}__animal_labels_native.nii
-        """
-    }
-}
-else{
-    log.error "Use a profile (freesurfer: -profile freesurfer_proper , civet: -profile civet2_dkt)"
+    script:
+    """
+    mris_convert --to-scanner ${lh_pial} lh.pial.vtk
+    mris_convert --to-scanner ${rh_pial} rh.pial.vtk
+    mris_convert --to-scanner ${lh_white} lh.white.vtk
+    mris_convert --to-scanner ${rh_white} rh.white.vtk
+    mv lh.pial.vtk ${sid}__lh_pial.vtk
+    mv rh.pial.vtk ${sid}__rh_pial.vtk
+    mv lh.white.vtk ${sid}__lh_white.vtk
+    mv rh.white.vtk ${sid}__rh_white.vtk
+    """
 }
 
 // setup variable
