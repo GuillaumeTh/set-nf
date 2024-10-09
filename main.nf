@@ -117,6 +117,8 @@ You need to chose a profile with "-profile" for surfaces loading
 
 process README {
     cpus 1
+    time '1m'
+    memory '1 GB'
     tag = {"global"}
     publishDir = {"${params.output_dir}/${task.process}"}
 
@@ -329,6 +331,8 @@ else if (params.is_freesurfer) {
 
         process A__Convert_Freesurfer_Surface {
             cpus 1
+            time { '10m' * task.attempt }
+            memory { '8 GB' * task.attempt }
 
             input:
             set sid, file(lh_pial),  file(rh_pial),  file(lh_white),  file(rh_white)\
@@ -378,6 +382,8 @@ else if (params.is_civet) {
 
     process A__Civet_Template {
         cpus 1
+        time { '1m' * task.attempt }
+        memory { '1 GB' * task.attempt }
         tag = {"global"}
         publishDir = {"${params.output_dir}/${task.process}"}
 
@@ -475,6 +481,8 @@ println("Number of subject (with surface and fodf) is " + nb_subject.toString())
 
 process A__Convert_Label_Volume {
     cpus 1
+    time { '10m' * task.attempt }
+    memory { '8 GB' * task.attempt }
 
     input:
     set sid, file(label_vol)\
@@ -492,6 +500,8 @@ process A__Convert_Label_Volume {
 
 process A__Surface_to_LPS{
     cpus 1
+    time { '10m' * task.attempt }
+    memory { '8 GB' * task.attempt }
 
     input:
     set sid, file(lh_pial), file(rh_pial), file(lh_white), file(rh_white)\
@@ -517,6 +527,8 @@ annots_for_surfaces_masks
 
 process B__Surface_Mask {
     cpus 1
+    time { '30m' * task.attempt }
+    memory { '10 GB' * task.attempt }
 
     input:
     set sid, file(lh_annot), file(rh_annot), file(lh_surf), file(rh_surf)\
@@ -567,6 +579,8 @@ surfaces_for_surfaces_labels
 
 process B__Surface_Label {
     cpus 1
+    time { '30m' * task.attempt }
+    memory { '10 GB' * task.attempt }
 
     input:
     set sid, file(lh_surf), file(rh_surf), file(lh_annot), file(rh_annot)\
@@ -592,6 +606,8 @@ process B__Surface_Label {
 // Generate ROIs in VTK
 process B__Generate_ROI {
     cpus 1
+    time { '20m' * task.attempt }
+    memory { '8 GB' * task.attempt }
 
     input:
     set sid, file(vol)\
@@ -626,6 +642,8 @@ map_for_rois_seed
 
 process B__ROI_Mask {
     cpus 1
+    time { '20m' * task.attempt }
+    memory { '10 GB' * task.attempt }
 
     input:
     set sid, file(map), file(rois)\
@@ -674,6 +692,8 @@ surfaces_to_concatenate
 
 process B__Concatenate_Surface {
     cpus 1
+    time { '20m' * task.attempt }
+    memory { '10 GB' * task.attempt }
 
     input:
     set sid, file(lh_pial), file(rh_pial), file(lh_white), file(rh_white), file(rois)\
@@ -709,6 +729,8 @@ masks_for_concatenate
 
 process B__Concatenate_Mask {
     cpus 1
+    time { '20m' * task.attempt }
+    memory { '10 GB' * task.attempt }
 
     input:
     set sid, file(lh_flow_mask), file(rh_flow_mask), file(lh_seed_mask), file(rh_seed_mask),\
@@ -755,6 +777,8 @@ labels_for_cocatenate
 
 process B__Concatenate_Label {
     cpus 1
+    time { '20m' * task.attempt }
+    memory { '10 GB' * task.attempt }
 
     input:
     set sid, file(lh_labels), file(rh_labels), file(lh_zero), file(rh_zero), file(rois_labels)\
@@ -793,6 +817,8 @@ else{
     // if "tractoflow" or "antswarp"
     process A__Convert_ANTs_Transformation {
         cpus 1
+        time { '1m' * task.attempt }
+        memory { '2 GB' * task.attempt }
 
         input:
         set sid, file(affine_transfo), file(warp_transfo)\
@@ -816,6 +842,8 @@ else{
     //Apply Transform to surfaces (from t1 to dwi space)
     process C__Register_Surface {
         cpus 1
+        time { '10m' * task.attempt }
+        memory { '8 GB' * task.attempt }
 
         input:
         set sid, file(affine_transfo), file(warp_transfo), file(surfaces)\
@@ -840,6 +868,8 @@ surfaces_for_smooth
 
 process D__Surface_Flow {
     cpus 1
+    time { '8h' * task.attempt }
+    memory { '20 GB' * task.attempt }
 
     input:
     set sid, file(surf), file(mask)\
@@ -889,6 +919,8 @@ surfaces_for_seed
 
 process E__Surface_Seeding_Map {
     cpus 1
+    time { '10m' * task.attempt }
+    memory { '8 GB' * task.attempt }
 
     input:
     set sid, file(surf), file(mask)\
@@ -938,6 +970,8 @@ set_input_ch
 
 process F__Surface_Enhanced_Tractography {
     cpus 1
+    time { '10h' * task.attempt }
+    memory { '32 GB' * task.attempt }
 
     input:
     set sid, file(seed_map), file(sum_density), random_id, loop_id,\
@@ -1044,6 +1078,8 @@ intersections_for_concatenate
 
 process G__Concatenate_Intersection {
     cpus 1
+    time { '20m' * task.attempt }
+    memory { '10 GB' * task.attempt }
 
     input:
     set sid, file(intersections)\
@@ -1074,6 +1110,8 @@ intersections_for_connectivity
 
 process H__Compute_Connectivity_Matrix {
     cpus 1
+    time { '20m' * task.attempt }
+    memory { '10 GB' * task.attempt }
 
     input:
     set sid, file(intersections), file(surf), file(labels)\
@@ -1096,6 +1134,8 @@ intersections_for_density
 
 process H__Compute_Surface_Density {
     cpus 1
+    time { '20m' * task.attempt }
+    memory { '10 GB' * task.attempt }
 
     input:
     set sid, file(intersections), file(surf)\
