@@ -163,7 +163,7 @@ fodf_and_map_for_pft = Channel
     .ifEmpty { exit 1, "Cannot find ${tractoflow}/**/{FODF_Metrics/*fodf.nii.gz,PFT_Maps/*map_exclude.nii.gz,PFT_Maps/*map_include.nii.gz}" }
 
 // nb_sub_fodf = file("${tractoflow}/**/FODF_Metrics/*fodf.nii.gz").size()
-log.info "Number of fodf is ${map_for_rois_seed.first().count()}"
+// log.info "Number of fodf is ${map_for_rois_seed.first().count()}"
 
 if (params.atlas=="freesurfer_standard"){
     in_surfaces_label = Channel
@@ -194,7 +194,7 @@ in_surfaces_label
     .set{in_surfaces}
 
 // nb_sub_surf = file("${surfaces}/**/surf/lh.white").size()
-log.info "Number of surface is ${in_surfaces_wmparc.first().count()}"
+// log.info "Number of surface is ${in_surfaces_wmparc.first().count()}"
 
 (annots_for_surfaces_masks, annots_for_surfaces_labels, label_vol_to_convert, freesurfer_surfaces_to_convert) = in_surfaces
     .map{sid, lh_annot, rh_annot, wmparc, lh_pial, lh_white, rh_pial, rh_white ->
