@@ -193,8 +193,8 @@ in_surfaces_label
     .join(in_surfaces_mesh)
     .set{in_surfaces}
 
-nb_sub_surf = file("${surfaces}/**/surf/lh.white").size()
-log.info "Number of surface is ${nb_sub_surf.toString()}"
+// nb_sub_surf = file("${surfaces}/**/surf/lh.white").size()
+log.info "Number of surface is ${in_surfaces_wmparc.count()}"
 
 (annots_for_surfaces_masks, annots_for_surfaces_labels, label_vol_to_convert, freesurfer_surfaces_to_convert) = in_surfaces
     .map{sid, lh_annot, rh_annot, wmparc, lh_pial, lh_white, rh_pial, rh_white ->
