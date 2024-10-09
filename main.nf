@@ -165,6 +165,19 @@ fodf_and_map_for_pft = Channel
 nb_sub_fodf = file("${tractoflow}/**/FODF_Metrics/*fodf.nii.gz").size()
 log.info "Number of fodf is ${nb_sub_fodf.toString()}"
 
+if (params.atlas=="freesurfer_standard"){
+    in_surfaces_label = Channel
+        .fromFilePairs("${surfaces}/**/{label/lh.aparc.annot,label/rh.aparc.annot}",
+                        size: 2, maxDepth:3, flat: true) {it.parent.parent.name}
+        .ifEmpty { exit 1, "Cannot find freesurfer data: ${surfaces}/**/{label/lh.aparc.annot,label/rh.aparc.annot}" }
+}
+else if (params.atlas=="freesurfer_a2009s"){
+    in_surfaces_label = Channel
+        .fromFilePairs("${surfaces}/**/{label/lh.aparc.a2009s.annot,label/rh.aparc.a2009s.annot}",
+                        size: 2, maxDepth:3, flat: true) {it.parent.parent.name}
+        .ifEmpty { exit 1, "Cannot find freesurfer data ${surfaces}/**/{label/lh.aparc.a2009s.annot,label/rh.aparc.a2009s.annot}" }
+}
+
 in_surfaces_wmparc = Channel
     .fromFilePairs("${surfaces}/**/mri/wmparc*",
                     size: 1, maxDepth:3, flat: true) {it.parent.parent.name}
