@@ -235,7 +235,7 @@ process A__Convert_Freesurfer_Surface {
 
 // setup variable
 nb_subject = surface_count.count()
-println("Number of subject (with surface and fodf) is " + nb_subject.toString())
+log.info "Number of subject (with surface and fodf) is ${nb_subject}"
 
 process A__Convert_Label_Volume {
     cpus 1
